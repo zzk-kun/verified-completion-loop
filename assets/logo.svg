@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="280" viewBox="0 0 960 280" role="img" aria-labelledby="title desc">
+  <title id="title">Verified Completion Loop</title>
+  <desc id="desc">A green completion loop and checkmark beside the project name.</desc>
+  <rect width="960" height="280" rx="36" fill="#07130d"/>
+  <circle cx="142" cy="140" r="74" fill="none" stroke="#22c55e" stroke-width="18" stroke-dasharray="380 90" stroke-linecap="round"/>
+  <path d="m100 140 28 28 58-70" fill="none" stroke="#f0fdf4" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="250" y="128" fill="#f0fdf4" font-family="Segoe UI, Arial, sans-serif" font-size="54" font-weight="700">Verified Completion</text>
+  <text x="250" y="188" fill="#86efac" font-family="Segoe UI, Arial, sans-serif" font-size="48" font-weight="600">Loop</text>
+</svg>

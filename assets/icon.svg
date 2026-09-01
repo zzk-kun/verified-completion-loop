@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title>Verified Completion Loop icon</title>
+  <rect width="64" height="64" rx="16" fill="#07130d"/>
+  <path d="M49 22a21 21 0 1 0 2 17" fill="none" stroke="#22c55e" stroke-width="6" stroke-linecap="round"/>
+  <path d="m21 32 8 8 16-18" fill="none" stroke="#f0fdf4" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
