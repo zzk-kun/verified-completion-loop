@@ -33,9 +33,9 @@ flowchart LR
 
 The skill stays deliberately light during normal execution:
 
-1. **Anchor:** Preserve the original request, constraints, prohibitions, authority, and deliverables.
+1. **Anchor:** Preserve every original user message and later change, plus constraints, prohibitions, authority, and deliverables.
 2. **Sleep:** Let the primary workflow research, design, implement, test, and integrate.
-3. **Close the loop:** At final delivery, map every normative source segment to requirements, verify current evidence, remediate authorized gaps, and recheck regressions.
+3. **Close the loop:** At final delivery, partition the complete source without gaps, map every normative segment to requirements, verify current evidence, remediate authorized gaps, and recheck regressions.
 
 It is a closeout completion controller, not a heavyweight project manager.
 
@@ -43,7 +43,7 @@ It is a closeout completion controller, not a heavyweight project manager.
 
 | Invariant | What it prevents |
 |---|---|
-| **Source coverage is complete** | A missing requirement disappearing from the denominator |
+| **Source coverage is complete** | A whole omitted paragraph disappearing before requirement counting |
 | **Authority boundaries are preserved** | “Finish everything” becoming permission to deploy, spend, delete, or read secrets |
 | **Governance is proportional but complete** | Small tasks drowning in ceremony while large tasks escape rigor |
 | **Evidence is current and reproducible** | Old tests, screenshots, hashes, or PR states proving a new claim |
@@ -64,7 +64,7 @@ Every level preserves 100% requirement coverage. The level changes evidence cost
 TASK_FULLY_VERIFIED
 ```
 
-Only when every mandatory requirement passes with current evidence and there is no missing ID, scope drift, authority violation, retryable work, or relevant regression.
+Only when every effective mandatory requirement passes with timestamped, reproducible evidence and there is no missing ID, source gap, scope drift, authority violation, retryable work, or relevant regression.
 
 ```text
 ALL_AUTHORIZED_INDEPENDENT_WORK_COMPLETE
@@ -86,13 +86,26 @@ The optional validator is dependency-free:
 python scripts/validate_manifest.py path/to/completion-manifest.json
 ```
 
-It checks source/requirement mapping, duplicate IDs, current evidence markers, authority violations, scope drift, regression failures, blocker coverage, and completion-claim eligibility.
+Manifest V2 checks:
+
+- exact UTF-8 source-document identity;
+- gap-free and overlap-free source-span coverage;
+- contiguous declared and actual document, segment, and requirement IDs;
+- bidirectional source-to-requirement mapping;
+- preserved replacement and revocation history;
+- timestamped evidence with reproducible provenance;
+- source-grounded authority and material observed actions;
+- regression evidence and STRICT before/after proof;
+- blocker attempts, exhausted alternatives, and exact requirement coverage;
+- completion-claim eligibility.
 
 ```text
-COMPLETION_MANIFEST status=PASS claim=TASK_FULLY_VERIFIED mandatory=12 pass=12
+COMPLETION_MANIFEST status=PASS claim=TASK_FULLY_VERIFIED mandatory=12 pass=12 blocked=0
 ```
 
-The validator proves manifest integrity, not the truth of evidence statements. Codex must still inspect actual files, tests, runtime, Git, PRs, providers, or Owner acceptance as the requirement demands.
+The validator proves manifest integrity, not semantic classification or the truth of evidence statements. Codex must still inspect actual files, tests, runtime, Git, PRs, providers, or Owner acceptance as the requirement demands.
+
+The full-source manifest is local and temporary. Never upload it. If source messages contain secrets or private content that must not be written to disk, perform the same complete span review in memory and disclose that machine validation was intentionally not used; never pass a redacted source off as complete coverage.
 
 ## Install
 

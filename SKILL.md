@@ -13,11 +13,11 @@ Do not treat a completion report as completion. Before ending a substantial task
 
 Use a three-stage lifecycle:
 
-1. **Start anchor:** Preserve the original request, explicit constraints, prohibited actions, authority boundaries, and expected deliverables. Keep this lightweight.
+1. **Start anchor:** Preserve every original user request and later change verbatim in the conversation or another authorized source, plus explicit constraints, prohibited actions, authority boundaries, and expected deliverables. Keep this lightweight.
 2. **Dormant execution:** Let the primary workflow do the work. Refresh the anchor only when the user changes scope or authority, context is compacted, work resumes after interruption, or an Owner gate appears.
 3. **Closeout loop:** When the task appears ready to finish, build the full requirement-to-evidence matrix, verify it, remediate authorized gaps, run affected regressions, and repeat until the completion gate passes or only genuine blockers remain.
 
-If invoked only at closeout, reconstruct the anchor from the original request and later user changes. Never substitute an executor summary for the original request.
+If invoked only at closeout, reconstruct the anchor from the original user messages and later changes. Never substitute an executor summary, plan, or prior closeout for the source request.
 
 ## Choose proportional depth
 
@@ -29,7 +29,7 @@ Depth changes evidence cost, never coverage, safety, or truthfulness. Upgrade au
 
 ## Freeze requirements without losing the source
 
-Create stable source segment IDs and requirement IDs. Preserve both directions:
+Create contiguous source-document, source-segment, and requirement IDs. Preserve both directions:
 
 ```text
 S-001 -> R-001, R-002
@@ -37,22 +37,23 @@ R-001 -> S-001
 R-002 -> S-001
 ```
 
-Every source segment must be classified as `REQUIREMENT`, `CONSTRAINT`, `PROHIBITION`, `DELIVERABLE`, `CONTEXT`, or `EXAMPLE`. The first four require at least one mapped requirement. Context and examples may map to none.
+Treat each original user message or authorized source as a complete source document. Partition the entire document into non-overlapping, gap-free source segments; do not select only the sentences that are convenient to implement. Every segment must be classified as `REQUIREMENT`, `CONSTRAINT`, `PROHIBITION`, `DELIVERABLE`, `CONTEXT`, or `EXAMPLE`. The first four require at least one mapped requirement. Context and examples may map to none.
 
-Every requirement must map back to source segments, unless it is a necessary derived step with an explicit rationale. Detect and resolve:
+Every requirement must map back to source segments, unless it is a necessary derived step with an explicit rationale. Preserve later additions, clarifications, replacements, and revocations; mark superseded requirements instead of deleting them. Detect and resolve:
 
 - unmapped source requirements;
 - orphan or duplicate requirements;
 - silently dropped constraints or prohibitions;
 - contradictory requirements;
-- later user additions, replacements, and revocations;
+- missing or non-contiguous source, segment, and requirement IDs;
+- later user additions, replacements, and revocations without preserved history;
 - output formats, counts, ordering, final status tokens, allowed files, and forbidden actions.
 
 Do not rewrite a hard requirement to match the implementation. Do not inflate the denominator with speculative work.
 
 ## Keep authority separate from requirements
 
-Requirements define the result. Authority defines permitted means. Record allowed and prohibited reads, writes, external actions, destructive actions, providers, production access, secrets, spending, communication, merge, and release boundaries as applicable.
+Requirements define the result. Authority defines permitted means. Ground each allowed or prohibited action in source authority or an explicit necessary-step rationale. For STANDARD and STRICT closeout, record every material observed mutation and the allowed action that authorized it. Record reads, writes, external actions, destructive actions, providers, production access, secrets, spending, communication, merge, and release boundaries as applicable.
 
 Before each remediation action, confirm that it is:
 
@@ -77,9 +78,10 @@ FAIL_RETRYABLE
 BLOCKED_OWNER
 BLOCKED_CAPABILITY
 DEFERRED_BY_SCOPE
+SUPERSEDED
 ```
 
-`IMPLEMENTED` is not `PASS`. Define direct, current evidence and a pass condition for every mandatory requirement before claiming it complete. Evidence may include file identity, tests, runtime behavior, screenshots, Git state, PR state, provider state, or Owner acceptance, depending on the requirement.
+`IMPLEMENTED` is not `PASS`. Define direct, current evidence and a pass condition for every effective mandatory requirement before claiming it complete. Evidence must include a capture time and reproducible provenance such as a command, artifact identity, or authoritative source. It may include file identity, tests, runtime behavior, screenshots, Git state, PR state, provider state, or Owner acceptance, depending on the requirement.
 
 Historical evidence is context, not proof of current state. Tests do not override contradictory source or runtime evidence.
 
@@ -127,14 +129,15 @@ Before the final response, require all of the following:
 
 ```text
 source coverage complete
+every source document fully partitioned without gaps or overlaps
 mandatory requirements accounted for exactly once
-all mandatory requirements PASS
+all effective mandatory requirements PASS
 no missing or duplicate IDs
 no unresolved retryable work
 no authority violation
 no scope drift
 no relevant regression failure
-current evidence supports every PASS
+current, timestamped, reproducible evidence supports every PASS
 ```
 
 Only then claim `TASK_FULLY_VERIFIED`.
@@ -143,10 +146,10 @@ If all independent authorized work is complete and only proven Owner/capability 
 
 For audit-only work, use `AUDIT_COMPLETE` when every audit deliverable passes, regardless of whether the audited subject has defects.
 
-For STANDARD or STRICT work, read [references/protocol.md](references/protocol.md). When a machine-readable manifest adds useful confidence, create it in a temporary or task-authorized location and run:
+For STANDARD or STRICT work, read [references/protocol.md](references/protocol.md). Use the V2 machine-readable manifest when the source can be stored safely in a temporary or task-authorized local location, then run:
 
 ```text
 python scripts/validate_manifest.py <manifest.json>
 ```
 
-Remove temporary manifests at closeout unless the user or project requires durable state. Never store secrets or private content in them.
+Remove temporary manifests at closeout unless the user or project requires durable state. Never upload a task manifest. If source messages contain secrets or private content that must not be written to disk, perform the same complete span review in memory and state that machine manifest validation was intentionally not used; never replace it with a redacted manifest presented as full coverage.

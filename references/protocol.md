@@ -1,72 +1,125 @@
-# Completion Protocol
+# Completion Protocol V2
 
 Read this reference for STANDARD and STRICT closeout work.
 
-## 1. Source ledger
+## 1. Preserve the complete source
 
-Preserve the original request and every later change as stable source segments. Record whether a later segment adds, replaces, narrows, revokes, or clarifies earlier requirements. Do not erase history when the effective requirement changes.
+Use each original user message and every later addition, clarification, replacement, or revocation as an ordered source document. Do not build the matrix from an executor summary, plan, issue title, or prior closeout.
 
-Classifications:
+Assign contiguous IDs:
+
+```text
+D-001, D-002, ...  source documents
+S-001, S-002, ...  source segments
+R-001, R-002, ...  requirements
+```
+
+Partition every character of every source document into ordered, non-overlapping, gap-free source segments. This is the control that prevents an omitted paragraph from disappearing before requirement counting begins.
+
+Classify every segment:
 
 - `REQUIREMENT`: a result the task must achieve;
 - `CONSTRAINT`: a limit on how or where work is performed;
 - `PROHIBITION`: an action that must not occur;
-- `DELIVERABLE`: required output, format, or final state;
+- `DELIVERABLE`: required output, format, count, order, or final state;
 - `CONTEXT`: background that does not independently require work;
 - `EXAMPLE`: illustrative material unless the wording makes it normative.
 
-Run a bidirectional coverage review:
+The first four classifications require at least one mapped requirement. Context and examples may map to none, but they must still occupy their source span.
 
-1. Every normative source segment maps to one or more requirements.
-2. Every source-backed requirement maps to every relevant source segment.
-3. A derived requirement has no source mapping only when it is necessary to complete or verify a source-backed requirement and includes a rationale.
-4. No requirement is duplicated under different wording.
-5. Prohibitions and output constraints are represented, not left in prose outside the matrix.
+## 2. Preserve change history
 
-## 2. Requirement record
+Every segment records one change type:
 
-Each requirement should contain:
+```text
+INITIAL
+ADD
+CLARIFY
+REPLACE
+REVOKE
+NONE
+```
+
+`REPLACE` and `REVOKE` segments identify the requirements they affect. Do not delete the old requirement. Preserve it with:
 
 ```json
 {
-  "id": "R-001",
-  "title": "Preserve the target file",
-  "sourceIds": ["S-003"],
-  "derivedNecessary": false,
-  "rationale": "",
-  "mandatory": true,
-  "status": "PASS",
-  "evidence": [
-    {
-      "kind": "file-identity",
-      "summary": "Before and after SHA-256 match",
-      "fresh": true
-    }
-  ]
+  "effective": false,
+  "status": "SUPERSEDED",
+  "supersededBySourceIds": ["S-006"]
 }
 ```
 
-Use direct evidence proportional to the claim. Record what was actually observed, not what the implementation should theoretically do.
+The replacement receives a new contiguous requirement ID. Final completion counts only effective mandatory requirements, while the full history remains auditable.
 
-## 3. Authority manifest
+## 3. Run bidirectional coverage
 
-Keep authorization independent of completion status:
+Require both mappings:
+
+```text
+S-001 -> R-001, R-002
+R-001 -> S-001
+R-002 -> S-001
+```
+
+Reject:
+
+- an unsegmented source range;
+- an unmapped normative segment;
+- a requirement without source segments or a necessary-step rationale;
+- a one-way mapping;
+- duplicate or non-contiguous IDs;
+- a declared expected-ID inventory that differs from actual records;
+- a replacement or revocation that erases history.
+
+A necessary derived requirement may omit source IDs only when `derivedNecessary` is true and `rationale` explains why it is required to complete or verify a source-backed requirement.
+
+## 4. Keep authority independent
+
+Desired completion does not grant the means to reach it. Record:
+
+- `allowed`: actions grounded in source authority or an explicit necessary-step rationale;
+- `prohibited`: boundaries grounded the same way;
+- `observedActions`: material mutations performed and the allowed action authorizing each one;
+- `violations`: any proven authority breach.
+
+Use contiguous IDs:
+
+```text
+A-001  allowed action
+P-001  prohibited action
+X-001  observed material action
+```
+
+An accepted claim requires zero authority violations. Do not silently infer provider, production, payment, secret, destructive, merge, release, or external-communication authority from a broad completion request.
+
+## 5. Require current evidence
+
+A `PASS` requires at least one evidence record containing:
 
 ```json
 {
-  "allowed": ["read workspace", "edit admitted files", "run local tests"],
-  "prohibited": ["production writes", "secret access", "merge without approval"],
-  "violations": []
+  "kind": "test",
+  "summary": "The focused suite exits 0",
+  "fresh": true,
+  "capturedAt": "2026-09-01T00:00:00Z",
+  "command": "python -m unittest"
 }
 ```
 
-An empty violation list is required for any accepted completion claim. If an action needs new authority, do not execute it merely because it would close a requirement.
+Evidence must have a valid capture time and at least one reproducible provenance field:
 
-## 4. Remediation queue
+- `command`;
+- `artifactIdentity`;
+- `source`.
 
-Prioritize unresolved requirements by dependency, safety, and how many downstream checks they unblock. A remediation unit should close a source-backed requirement or a necessary blocker, not create a speculative side project.
+Historical evidence is context, not current proof. A test does not override contradictory source, runtime, provider, Git, or Owner evidence.
 
-Classify new findings:
+STANDARD and STRICT claims require regression-check evidence. STRICT claims also require explicit before/after records. A STRICT before/after record states whether a subject was expected to change and verifies the corresponding identities.
+
+## 6. Remediate instead of reporting retryable gaps
+
+Classify findings:
 
 - `IN_SCOPE_REQUIRED_FIX`
 - `BLOCKER_TO_REQUIREMENT`
@@ -75,11 +128,21 @@ Classify new findings:
 - `OUT_OF_SCOPE`
 - `OWNER_DECISION_REQUIRED`
 
-Only the first three automatically enter the current remediation loop.
+The first three automatically enter the current remediation queue when the task authorizes implementation.
 
-After a fix, rerun its direct verification and every passing requirement materially affected by the change. In STRICT mode, perform a final full-matrix recheck from current evidence.
+For each retryable gap:
 
-## 5. Blockers
+1. diagnose the cause;
+2. select a materially new in-scope strategy;
+3. implement the smallest complete fix;
+4. run direct verification;
+5. rerun affected passing requirements;
+6. update current evidence;
+7. repeat.
+
+A retry must add evidence, diagnosis, strategy, or relevant external-state change. Repeating the same failed command is not progress.
+
+## 7. Prove genuine blockers
 
 A blocker record requires:
 
@@ -88,91 +151,145 @@ A blocker record requires:
   "type": "OWNER",
   "requirementIds": ["R-014"],
   "reason": "Production migration approval is absent",
+  "attempts": ["Checked the current request and authority ledger"],
+  "alternativesExhausted": ["Preview evidence cannot prove production state"],
   "resumeCondition": "Owner authorizes or rejects the production migration",
-  "nextAction": "Execute the approved migration plan or close the requirement as rejected",
+  "nextAction": "Execute the authorized decision",
   "independentWorkComplete": true
 }
 ```
 
-Use `CAPABILITY` instead of `OWNER` when the missing condition is an unavailable tool, service, runtime, or external-state change rather than a decision.
+Use `CAPABILITY` when the missing condition is a tool, service, runtime, or external-state change rather than a decision. A gate blocks only dependent requirements; complete every independent authorized requirement first.
 
-Do not mark a requirement blocked because it is difficult, slow, failed once, or would benefit from clarification that can be safely inferred from current evidence.
+## 8. Respect task type
 
-## 6. Machine-readable manifest
+- `CHANGE`: remediate authorized gaps until verified.
+- `AUDIT_ONLY`: complete every audit deliverable without mutating the audited target.
+- `DIAGNOSE_ONLY`: prove the cause without implementation.
+- `ANSWER`: cover and verify the requested answer without external mutation.
+- `MONITOR`: use the authorized monitoring mechanism; unchanged state is expected.
 
-The optional validator accepts this shape:
+The subject of an audit may fail while the audit itself reaches `AUDIT_COMPLETE`.
+
+## 9. V2 manifest shape
+
+The validator accepts a JSON object with these sections:
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "level": "STANDARD",
   "taskType": "CHANGE",
+  "expectedSourceDocumentIds": ["D-001"],
+  "expectedSourceSegmentIds": ["S-001"],
+  "expectedRequirementIds": ["R-001"],
+  "sourceDocuments": [
+    {
+      "id": "D-001",
+      "sequence": 1,
+      "content": "Update the parser and run its tests.",
+      "sha256": "a636a2341131c348462847567634363646127e2c87a3ff56c22ee5930ccf32a0"
+    }
+  ],
   "sourceSegments": [
     {
       "id": "S-001",
-      "text": "Update the parser and run its tests.",
+      "documentId": "D-001",
+      "start": 0,
+      "end": 36,
       "classification": "REQUIREMENT",
-      "requirementIds": ["R-001", "R-002"]
+      "changeType": "INITIAL",
+      "requirementIds": ["R-001"],
+      "affectedRequirementIds": []
     }
   ],
   "requirements": [
     {
       "id": "R-001",
-      "title": "Update the parser",
+      "title": "Update and verify the parser",
       "sourceIds": ["S-001"],
       "derivedNecessary": false,
       "rationale": "",
       "mandatory": true,
+      "effective": true,
+      "supersededBySourceIds": [],
       "status": "PASS",
       "evidence": [
-        {"kind": "diff", "summary": "Parser handles the new form", "fresh": true}
-      ]
-    },
-    {
-      "id": "R-002",
-      "title": "Run parser tests",
-      "sourceIds": ["S-001"],
-      "derivedNecessary": false,
-      "rationale": "",
-      "mandatory": true,
-      "status": "PASS",
-      "evidence": [
-        {"kind": "test", "summary": "Parser suite exits 0", "fresh": true}
+        {
+          "kind": "test",
+          "summary": "Parser tests exit 0",
+          "fresh": true,
+          "capturedAt": "2026-09-01T00:00:00Z",
+          "command": "python -m unittest"
+        }
       ]
     }
   ],
   "authority": {
-    "allowed": ["edit parser files", "run local tests"],
-    "prohibited": ["deploy to production"],
+    "allowed": [
+      {
+        "id": "A-001",
+        "action": "edit parser files",
+        "basisSourceIds": ["S-001"],
+        "derivedNecessary": false,
+        "rationale": ""
+      }
+    ],
+    "prohibited": [],
+    "observedActions": [
+      {"id": "X-001", "action": "edited parser files", "allowedBy": "A-001"}
+    ],
     "violations": []
   },
   "scopeDrift": [],
   "missingIds": [],
   "duplicateIds": [],
+  "regressionChecks": [
+    {
+      "kind": "test",
+      "summary": "Relevant regressions exit 0",
+      "fresh": true,
+      "capturedAt": "2026-09-01T00:00:00Z",
+      "command": "python -m unittest"
+    }
+  ],
   "regressionFailures": [],
+  "beforeAfter": [],
   "blockers": [],
   "completionClaim": "TASK_FULLY_VERIFIED"
 }
 ```
 
-Accepted claims:
+Calculate `sourceDocuments[].sha256` from the exact UTF-8 content. Ranges use zero-based Python string offsets, and the segments for each document must cover `0..len(content)` exactly.
 
-- `TASK_FULLY_VERIFIED`: every mandatory requirement is `PASS` and no blocker remains;
-- `AUDIT_COMPLETE`: task type is `AUDIT_ONLY` and every mandatory audit deliverable is `PASS`;
-- `ALL_AUTHORIZED_INDEPENDENT_WORK_COMPLETE`: all unresolved mandatory requirements are `BLOCKED_OWNER` or `BLOCKED_CAPABILITY`, each is covered by a complete blocker record, and no executable work remains.
+## 10. Privacy rule
 
-The validator checks structural integrity and claim eligibility. It cannot prove that evidence statements are true; the agent must inspect current reality.
+The full-source manifest is optional because source text may be sensitive.
 
-## 7. Final response
+- Use it only in a temporary or explicitly authorized local location.
+- Never upload it with the skill, a PR, logs, or a closeout report.
+- Delete the temporary manifest after validation unless durable storage is explicitly required.
+- If the source contains secrets or private content that must not be written to disk, perform the same complete span review in memory and disclose that machine manifest validation was intentionally not used.
+- Never validate a redacted or partial source and present it as complete coverage.
 
-Lead with the actual terminal state. Report:
+## 11. Completion claims
 
-- completed mandatory count and total;
-- unresolved requirement IDs, if any;
-- direct verification performed;
-- regressions checked;
-- authority boundaries preserved;
+- `TASK_FULLY_VERIFIED`: every effective mandatory requirement is `PASS`; source coverage, authority, regression, and level-specific checks pass; no blocker remains.
+- `AUDIT_COMPLETE`: task type is `AUDIT_ONLY` and every effective mandatory audit deliverable is `PASS`.
+- `ALL_AUTHORIZED_INDEPENDENT_WORK_COMPLETE`: all unresolved effective mandatory requirements are `BLOCKED_OWNER` or `BLOCKED_CAPABILITY`; complete blocker records cover exactly those requirements; no executable independent work remains.
+
+The validator proves manifest structure and claim eligibility. It cannot determine whether a sentence was semantically misclassified or whether an evidence statement is truthful; the closeout agent must independently inspect current reality.
+
+## 12. Final response
+
+Lead with the terminal state. Report:
+
+- effective mandatory pass count and total;
+- superseded requirement count when relevant;
+- unresolved IDs;
+- direct verification and regressions;
+- preserved authority boundaries;
 - exact blockers and resume conditions;
-- what was not verified.
+- anything intentionally not verified.
 
-Do not say “complete” when the accepted state is only `ALL_AUTHORIZED_INDEPENDENT_WORK_COMPLETE`.
+Do not say the whole task is complete when the accepted state is only `ALL_AUTHORIZED_INDEPENDENT_WORK_COMPLETE`.
