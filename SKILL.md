@@ -85,6 +85,20 @@ SUPERSEDED
 
 Historical evidence is context, not proof of current state. Tests do not override contradictory source or runtime evidence.
 
+## Discover the evidence surface before judging it
+
+For STANDARD and STRICT closeout, inventory the current artifacts that can define or contradict completion before assigning PASS. Search the admitted scope for authoritative specifications, current-state records, implementation targets, tests, runtime state, Git/PR state, and required external authorities. Record every candidate as `INSPECTED` or `EXCLUDED` with a reason and current identity.
+
+Do not let the implementation choose its own evidence set. A claim such as “all current truth is synchronized” is invalid if the review did not first establish which documents are current authorities. An accessible file, route, test, or historical note is evidence only after its role is classified.
+
+## Challenge the semantic conclusion
+
+Structural validation cannot tell whether a paragraph was mislabeled as context, a requirement was assigned to the wrong owner, or a truthful-looking evidence summary describes the wrong artifact. Before an accepted STANDARD or STRICT claim, perform the semantic challenge in [references/semantic-challenge.md](references/semantic-challenge.md).
+
+Prefer a fresh independent reviewer that receives the raw source and discovered artifacts, not the builder's PASS labels or completion prose. If no independent reviewer is available, use a clearly disclosed adversarial second pass: reread the raw source and artifacts, reconstruct the obligations, and try to falsify the proposed result before looking at the completion claim. Never describe that fallback as independent review.
+
+The challenge must separately test source omission, authority omission, semantic classification and ownership, contradictions, and the proposed final response. Any finding that is retryable and authorized returns to the remediation loop. A failed semantic challenge cannot be overridden by a structurally valid manifest.
+
 ## Continue instead of stopping at findings
 
 For every `FAIL_RETRYABLE`, `NOT_STARTED`, or otherwise executable gap:
@@ -138,6 +152,9 @@ no authority violation
 no scope drift
 no relevant regression failure
 current, timestamped, reproducible evidence supports every PASS
+the discovered authoritative artifact set is accounted for
+the semantic challenge passes with no unresolved findings
+the proposed final response does not exceed the evidence
 ```
 
 Only then claim `TASK_FULLY_VERIFIED`.
@@ -146,10 +163,12 @@ If all independent authorized work is complete and only proven Owner/capability 
 
 For audit-only work, use `AUDIT_COMPLETE` when every audit deliverable passes, regardless of whether the audited subject has defects.
 
-For STANDARD or STRICT work, read [references/protocol.md](references/protocol.md). Use the V2 machine-readable manifest when the source can be stored safely in a temporary or task-authorized local location, then run:
+For STANDARD or STRICT work, read [references/protocol.md](references/protocol.md) and [references/semantic-challenge.md](references/semantic-challenge.md). Use the V3 machine-readable manifest when the source can be stored safely in a temporary or task-authorized local location, then run:
 
 ```text
 python scripts/validate_manifest.py <manifest.json>
 ```
 
-Remove temporary manifests at closeout unless the user or project requires durable state. Never upload a task manifest. If source messages contain secrets or private content that must not be written to disk, perform the same complete span review in memory and state that machine manifest validation was intentionally not used; never replace it with a redacted manifest presented as full coverage.
+Remove temporary manifests at closeout unless the user or project requires durable state. Never upload a task manifest. If source messages contain secrets or private content that must not be written to disk, perform the same complete span and semantic review in memory and state that machine manifest validation was intentionally not used; never replace it with a redacted manifest presented as full coverage.
+
+Skill routing is advisory unless the host provides an external pre-final hook or trajectory assertion. `allow_implicit_invocation` and AGENTS instructions improve routing but cannot mechanically prove invocation. When host-level enforcement exists, require a fresh successful V3 validator receipt before the final completion event. Otherwise disclose this limitation in evaluations of the skill; do not market automatic invocation as a hard guarantee.

@@ -1,4 +1,4 @@
-# Completion Protocol V2
+# Completion Protocol V3
 
 Read this reference for STANDARD and STRICT closeout work.
 
@@ -93,7 +93,16 @@ X-001  observed material action
 
 An accepted claim requires zero authority violations. Do not silently infer provider, production, payment, secret, destructive, merge, release, or external-communication authority from a broad completion request.
 
-## 5. Require current evidence
+## 5. Inventory authoritative and target artifacts
+
+Before assigning PASS, discover the current evidence surface inside the admitted scope. Record authoritative specifications and decisions, implementation targets, tests, runtime state, Git/PR state, and required external authorities. Each candidate receives a contiguous `I-###` ID and is either:
+
+- `INSPECTED`, with its current identity; or
+- `EXCLUDED`, with a concrete reason why it cannot define or contradict completion.
+
+The inventory must record how discovery was performed and fresh evidence for that search. If no artifact exists beyond the source request, say why. Do not use an empty list to imply discovery.
+
+## 6. Require current evidence
 
 A `PASS` requires at least one evidence record containing:
 
@@ -117,7 +126,13 @@ Historical evidence is context, not current proof. A test does not override cont
 
 STANDARD and STRICT claims require regression-check evidence. STRICT claims also require explicit before/after records. A STRICT before/after record states whether a subject was expected to change and verifies the corresponding identities.
 
-## 6. Remediate instead of reporting retryable gaps
+## 7. Run a semantic challenge
+
+Follow [semantic-challenge.md](semantic-challenge.md). The reviewer must reread the source directly, review every effective mandatory requirement and every inspected artifact, and run all five required challenge passes. Prefer a fresh `INDEPENDENT_AGENT`. If it is unavailable, record `ADVERSARIAL_SECOND_PASS` and its independence limitation.
+
+For STRICT work, use `INDEPENDENT_AGENT` whenever a separate reviewer is available. Findings remain unresolved work; a manifest cannot pass while findings or a failed challenge remain. Review the proposed final response separately from implementation evidence.
+
+## 8. Remediate instead of reporting retryable gaps
 
 Classify findings:
 
@@ -142,7 +157,7 @@ For each retryable gap:
 
 A retry must add evidence, diagnosis, strategy, or relevant external-state change. Repeating the same failed command is not progress.
 
-## 7. Prove genuine blockers
+## 9. Prove genuine blockers
 
 A blocker record requires:
 
@@ -161,7 +176,7 @@ A blocker record requires:
 
 Use `CAPABILITY` when the missing condition is a tool, service, runtime, or external-state change rather than a decision. A gate blocks only dependent requirements; complete every independent authorized requirement first.
 
-## 8. Respect task type
+## 10. Respect task type
 
 - `CHANGE`: remediate authorized gaps until verified.
 - `AUDIT_ONLY`: complete every audit deliverable without mutating the audited target.
@@ -171,13 +186,13 @@ Use `CAPABILITY` when the missing condition is a tool, service, runtime, or exte
 
 The subject of an audit may fail while the audit itself reaches `AUDIT_COMPLETE`.
 
-## 9. V2 manifest shape
+## 11. V3 manifest shape
 
 The validator accepts a JSON object with these sections:
 
 ```json
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "level": "STANDARD",
   "taskType": "CHANGE",
   "expectedSourceDocumentIds": ["D-001"],
@@ -255,6 +270,53 @@ The validator accepts a JSON object with these sections:
   ],
   "regressionFailures": [],
   "beforeAfter": [],
+  "artifactInventory": {
+    "discoveryPerformed": true,
+    "method": "Search the admitted repository and current external state for authorities and targets.",
+    "capturedAt": "2026-09-01T00:00:00Z",
+    "evidence": [
+      {
+        "kind": "search",
+        "summary": "Artifact discovery completed",
+        "fresh": true,
+        "capturedAt": "2026-09-01T00:00:00Z",
+        "command": "rg --files"
+      }
+    ],
+    "artifacts": [
+      {
+        "id": "I-001",
+        "locator": "src/parser.py",
+        "role": "TARGET",
+        "disposition": "INSPECTED",
+        "rationale": "Direct implementation target.",
+        "identity": "sha256:current-file-hash"
+      }
+    ],
+    "noExternalArtifactsReason": ""
+  },
+  "semanticReview": {
+    "mode": "ADVERSARIAL_SECOND_PASS",
+    "reviewer": "fresh requirement-and-evidence pass",
+    "independentReviewAvailable": false,
+    "independenceLimitation": "No separate reviewer runtime was available.",
+    "sourceReadDirectly": true,
+    "reviewedRequirementIds": ["R-001"],
+    "reviewedArtifactIds": ["I-001"],
+    "checks": [
+      {"kind": "SOURCE_OMISSION", "result": "PASS", "summary": "No source obligation was omitted."},
+      {"kind": "AUTHORITY_OMISSION", "result": "PASS", "summary": "No current authority was omitted."},
+      {"kind": "SEMANTIC_CLASSIFICATION", "result": "PASS", "summary": "Meaning and ownership match the source."},
+      {"kind": "CONTRADICTION", "result": "PASS", "summary": "No contradictory current evidence remains."},
+      {"kind": "FINAL_RESPONSE_ALIGNMENT", "result": "PASS", "summary": "The proposed final claim matches the evidence."}
+    ],
+    "findings": [],
+    "verdict": "PASS",
+    "reviewedCompletionClaim": "TASK_FULLY_VERIFIED",
+    "reviewedMandatoryPass": 1,
+    "reviewedMandatoryTotal": 1,
+    "capturedAt": "2026-09-01T00:00:00Z"
+  },
   "blockers": [],
   "completionClaim": "TASK_FULLY_VERIFIED"
 }
@@ -262,7 +324,7 @@ The validator accepts a JSON object with these sections:
 
 Calculate `sourceDocuments[].sha256` from the exact UTF-8 content. Ranges use zero-based Python string offsets, and the segments for each document must cover `0..len(content)` exactly.
 
-## 10. Privacy rule
+## 12. Privacy rule
 
 The full-source manifest is optional because source text may be sensitive.
 
@@ -272,15 +334,15 @@ The full-source manifest is optional because source text may be sensitive.
 - If the source contains secrets or private content that must not be written to disk, perform the same complete span review in memory and disclose that machine manifest validation was intentionally not used.
 - Never validate a redacted or partial source and present it as complete coverage.
 
-## 11. Completion claims
+## 13. Completion claims
 
 - `TASK_FULLY_VERIFIED`: every effective mandatory requirement is `PASS`; source coverage, authority, regression, and level-specific checks pass; no blocker remains.
 - `AUDIT_COMPLETE`: task type is `AUDIT_ONLY` and every effective mandatory audit deliverable is `PASS`.
 - `ALL_AUTHORIZED_INDEPENDENT_WORK_COMPLETE`: all unresolved effective mandatory requirements are `BLOCKED_OWNER` or `BLOCKED_CAPABILITY`; complete blocker records cover exactly those requirements; no executable independent work remains.
 
-The validator proves manifest structure and claim eligibility. It cannot determine whether a sentence was semantically misclassified or whether an evidence statement is truthful; the closeout agent must independently inspect current reality.
+The validator proves manifest structure and claim eligibility. It proves that artifact discovery and semantic challenge records exist and are internally coherent; it cannot prove that their prose is truthful. Current reality still has to be inspected, and an independent reviewer is preferred because builder self-review is not independent acceptance.
 
-## 12. Final response
+## 14. Final response
 
 Lead with the terminal state. Report:
 

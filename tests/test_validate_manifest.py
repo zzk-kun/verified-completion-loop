@@ -27,7 +27,7 @@ def evidence(summary="Target test exits 0"):
 def valid_manifest():
     content = "Make the change and verify it."
     return {
-        "schemaVersion": 2,
+        "schemaVersion": 3,
         "level": "STANDARD",
         "taskType": "CHANGE",
         "expectedSourceDocumentIds": ["D-001"],
@@ -97,6 +97,45 @@ def valid_manifest():
         "regressionChecks": [evidence("Relevant regression exits 0")],
         "regressionFailures": [],
         "beforeAfter": [],
+        "artifactInventory": {
+            "discoveryPerformed": True,
+            "method": "Inspected the task source and searched the admitted repository for current authoritative artifacts.",
+            "capturedAt": CAPTURED_AT,
+            "evidence": [evidence("Artifact discovery completed")],
+            "artifacts": [
+                {
+                    "id": "I-001",
+                    "locator": "tests/fixture-target.txt",
+                    "role": "TARGET",
+                    "disposition": "INSPECTED",
+                    "rationale": "Direct target of the requested change.",
+                    "identity": "sha256:fixture",
+                }
+            ],
+            "noExternalArtifactsReason": "",
+        },
+        "semanticReview": {
+            "mode": "ADVERSARIAL_SECOND_PASS",
+            "reviewer": "fresh requirement-and-evidence pass",
+            "independentReviewAvailable": False,
+            "independenceLimitation": "No separate agent runtime was available; the second pass reread sources without relying on prior completion claims.",
+            "sourceReadDirectly": True,
+            "reviewedRequirementIds": ["R-001"],
+            "reviewedArtifactIds": ["I-001"],
+            "checks": [
+                {"kind": "SOURCE_OMISSION", "result": "PASS", "summary": "No source obligation was omitted."},
+                {"kind": "AUTHORITY_OMISSION", "result": "PASS", "summary": "No current authority was omitted."},
+                {"kind": "SEMANTIC_CLASSIFICATION", "result": "PASS", "summary": "Requirement ownership and meaning match the source."},
+                {"kind": "CONTRADICTION", "result": "PASS", "summary": "No contradictory current evidence remains."},
+                {"kind": "FINAL_RESPONSE_ALIGNMENT", "result": "PASS", "summary": "The proposed final claim matches the verified evidence."},
+            ],
+            "findings": [],
+            "verdict": "PASS",
+            "reviewedCompletionClaim": "TASK_FULLY_VERIFIED",
+            "reviewedMandatoryPass": 1,
+            "reviewedMandatoryTotal": 1,
+            "capturedAt": CAPTURED_AT,
+        },
         "blockers": [],
         "completionClaim": "TASK_FULLY_VERIFIED",
     }
@@ -202,6 +241,8 @@ class ManifestValidationTests(unittest.TestCase):
             }
         ]
         manifest["completionClaim"] = "ALL_AUTHORIZED_INDEPENDENT_WORK_COMPLETE"
+        manifest["semanticReview"]["reviewedCompletionClaim"] = "ALL_AUTHORIZED_INDEPENDENT_WORK_COMPLETE"
+        manifest["semanticReview"]["reviewedMandatoryPass"] = 0
         self.assertEqual(MODULE.validate_manifest(manifest), [])
 
     def test_rejects_blocker_without_attempts_and_alternatives(self):
@@ -270,6 +311,7 @@ class ManifestValidationTests(unittest.TestCase):
                 "evidence": [evidence("Replacement verification exits 0")],
             }
         )
+        manifest["semanticReview"]["reviewedRequirementIds"] = ["R-002"]
         manifest["authority"]["allowed"][0]["basisSourceIds"].append("S-002")
         self.assertEqual(MODULE.validate_manifest(manifest), [])
 
@@ -282,6 +324,111 @@ class ManifestValidationTests(unittest.TestCase):
         manifest = valid_manifest()
         manifest["regressionChecks"] = []
         self.assertTrue(any("regressionChecks" in error for error in MODULE.validate_manifest(manifest)))
+
+    def test_standard_claim_requires_artifact_discovery(self):
+        manifest = valid_manifest()
+        for value in (None, {}):
+            with self.subTest(value=value):
+                candidate = valid_manifest()
+                if value is None:
+                    del candidate["artifactInventory"]
+                else:
+                    candidate["artifactInventory"] = value
+                self.assertTrue(any("artifactInventory" in error for error in MODULE.validate_manifest(candidate)))
+
+    def test_standard_claim_requires_semantic_review(self):
+        for value in (None, {}):
+            with self.subTest(value=value):
+                manifest = valid_manifest()
+                if value is None:
+                    del manifest["semanticReview"]
+                else:
+                    manifest["semanticReview"] = value
+                self.assertTrue(any("semanticReview" in error for error in MODULE.validate_manifest(manifest)))
+
+    def test_rejects_semantic_review_that_skips_requirement(self):
+        manifest = valid_manifest()
+        manifest["semanticReview"]["reviewedRequirementIds"] = []
+        self.assertTrue(any("review every effective mandatory requirement" in error for error in MODULE.validate_manifest(manifest)))
+
+    def test_rejects_semantic_review_that_skips_inspected_artifact(self):
+        manifest = valid_manifest()
+        manifest["semanticReview"]["reviewedArtifactIds"] = []
+        self.assertTrue(any("review every inspected artifact" in error for error in MODULE.validate_manifest(manifest)))
+
+    def test_rejects_missing_semantic_countercheck_kind(self):
+        manifest = valid_manifest()
+        manifest["semanticReview"]["checks"] = manifest["semanticReview"]["checks"][:-1]
+        self.assertTrue(any("FINAL_RESPONSE_ALIGNMENT" in error for error in MODULE.validate_manifest(manifest)))
+
+    def test_rejects_semantic_finding_or_failed_verdict(self):
+        manifest = valid_manifest()
+        manifest["semanticReview"]["findings"] = ["Canonical owner was assigned to the wrong feature."]
+        manifest["semanticReview"]["verdict"] = "FAIL"
+        errors = MODULE.validate_manifest(manifest)
+        self.assertTrue(any("semantic findings" in error for error in errors))
+        self.assertTrue(any("semanticReview.verdict" in error for error in errors))
+
+    def test_strict_uses_independent_reviewer_when_available(self):
+        manifest = valid_manifest()
+        manifest["level"] = "STRICT"
+        manifest["beforeAfter"] = [
+            {
+                "subject": "target",
+                "before": "sha256:before",
+                "after": "sha256:after",
+                "expectation": "CHANGED",
+                "verified": True,
+            }
+        ]
+        manifest["semanticReview"]["independentReviewAvailable"] = True
+        errors = MODULE.validate_manifest(manifest)
+        self.assertTrue(any("INDEPENDENT_AGENT" in error for error in errors))
+
+    def test_light_does_not_require_heavy_closeout_records(self):
+        manifest = valid_manifest()
+        manifest["level"] = "LIGHT"
+        manifest["regressionChecks"] = []
+        del manifest["artifactInventory"]
+        del manifest["semanticReview"]
+        self.assertEqual(MODULE.validate_manifest(manifest), [])
+
+    def test_rejects_excluded_authoritative_artifact(self):
+        manifest = valid_manifest()
+        artifact = manifest["artifactInventory"]["artifacts"][0]
+        artifact["role"] = "AUTHORITATIVE"
+        artifact["disposition"] = "EXCLUDED"
+        del artifact["identity"]
+        errors = MODULE.validate_manifest(manifest)
+        self.assertTrue(any("authoritative artifact cannot be EXCLUDED" in error for error in errors))
+
+    def test_rejects_final_claim_counts_not_reviewed(self):
+        manifest = valid_manifest()
+        manifest["semanticReview"]["reviewedMandatoryPass"] = 0
+        errors = MODULE.validate_manifest(manifest)
+        self.assertTrue(any("reviewedMandatoryPass" in error for error in errors))
+
+    def test_accepts_strict_independent_semantic_review(self):
+        manifest = valid_manifest()
+        manifest["level"] = "STRICT"
+        manifest["beforeAfter"] = [
+            {
+                "subject": "target",
+                "before": "sha256:before",
+                "after": "sha256:after",
+                "expectation": "CHANGED",
+                "verified": True,
+            }
+        ]
+        manifest["semanticReview"].update(
+            {
+                "mode": "INDEPENDENT_AGENT",
+                "reviewer": "fresh independent reviewer",
+                "independentReviewAvailable": True,
+                "independenceLimitation": "",
+            }
+        )
+        self.assertEqual(MODULE.validate_manifest(manifest), [])
 
 
 if __name__ == "__main__":

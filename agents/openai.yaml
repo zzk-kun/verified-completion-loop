@@ -4,6 +4,6 @@ interface:
   icon_small: "./assets/icon.svg"
   icon_large: "./assets/logo.svg"
   brand_color: "#22C55E"
-  default_prompt: "Use $verified-completion-loop to close out this long task, complete every authorized gap, and verify the final result against the original request."
+  default_prompt: "Use $verified-completion-loop to close out this long task, complete every authorized gap, discover all current authorities, challenge the semantic result, and verify the final response against the original request."
 policy:
   allow_implicit_invocation: true

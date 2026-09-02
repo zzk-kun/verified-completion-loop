@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate a Verified Completion Loop v2 JSON manifest."""
+"""Validate a Verified Completion Loop v3 JSON manifest."""
 
 from __future__ import annotations
 
@@ -19,6 +19,7 @@ ID_PATTERNS = {
     "allowed action": re.compile(r"^A-[0-9]{3,}$"),
     "prohibited action": re.compile(r"^P-[0-9]{3,}$"),
     "observed action": re.compile(r"^X-[0-9]{3,}$"),
+    "artifact": re.compile(r"^I-[0-9]{3,}$"),
 }
 LEVELS = {"LIGHT", "STANDARD", "STRICT"}
 TASK_TYPES = {"CHANGE", "AUDIT_ONLY", "DIAGNOSE_ONLY", "ANSWER", "MONITOR"}
@@ -41,6 +42,13 @@ ACCEPTED_CLAIMS = {
     "TASK_FULLY_VERIFIED",
     "AUDIT_COMPLETE",
     "ALL_AUTHORIZED_INDEPENDENT_WORK_COMPLETE",
+}
+SEMANTIC_CHECK_KINDS = {
+    "SOURCE_OMISSION",
+    "AUTHORITY_OMISSION",
+    "SEMANTIC_CLASSIFICATION",
+    "CONTRADICTION",
+    "FINAL_RESPONSE_ALIGNMENT",
 }
 
 
@@ -147,8 +155,8 @@ def validate_manifest(data: Any) -> list[str]:
     if not isinstance(data, dict):
         return ["Manifest root must be an object."]
 
-    if data.get("schemaVersion") != 2:
-        errors.append("schemaVersion must be 2.")
+    if data.get("schemaVersion") != 3:
+        errors.append("schemaVersion must be 3.")
     level = data.get("level")
     if level not in LEVELS:
         errors.append("level must be LIGHT, STANDARD, or STRICT.")
@@ -458,6 +466,146 @@ def validate_manifest(data: Any) -> list[str]:
             errors.append(f"beforeAfter #{index} expected CHANGED but identities match.")
         if item.get("verified") is not True:
             errors.append(f"beforeAfter #{index} is not verified.")
+
+    artifact_inventory = data.get("artifactInventory")
+    inspected_artifact_ids: set[str] = set()
+    if level in {"STANDARD", "STRICT"} and (
+        not isinstance(artifact_inventory, dict) or not artifact_inventory
+    ):
+        errors.append(f"{level} completion requires artifactInventory discovery evidence.")
+        artifact_inventory = {}
+    elif artifact_inventory is None:
+        artifact_inventory = {}
+    elif not isinstance(artifact_inventory, dict):
+        errors.append("artifactInventory must be an object.")
+        artifact_inventory = {}
+    if artifact_inventory:
+        if artifact_inventory.get("discoveryPerformed") is not True:
+            errors.append("artifactInventory must confirm discoveryPerformed.")
+        if not isinstance(artifact_inventory.get("method"), str) or not artifact_inventory["method"].strip():
+            errors.append("artifactInventory lacks a discovery method.")
+        if not _valid_timestamp(artifact_inventory.get("capturedAt")):
+            errors.append("artifactInventory lacks a valid capturedAt timestamp.")
+        discovery_evidence = artifact_inventory.get("evidence")
+        if not isinstance(discovery_evidence, list) or not discovery_evidence:
+            errors.append("artifactInventory requires current discovery evidence.")
+        else:
+            for index, item in enumerate(discovery_evidence, start=1):
+                _validate_evidence(item, f"artifactInventory.evidence #{index}", errors)
+        artifacts = artifact_inventory.get("artifacts")
+        if not isinstance(artifacts, list):
+            errors.append("artifactInventory.artifacts must be an array.")
+            artifacts = []
+        no_artifacts_reason = artifact_inventory.get("noExternalArtifactsReason")
+        if not artifacts and not (isinstance(no_artifacts_reason, str) and no_artifacts_reason.strip()):
+            errors.append("artifactInventory requires artifacts or a noExternalArtifactsReason.")
+        artifact_ids = [item.get("id") for item in artifacts if isinstance(item, dict)]
+        expected_artifact_ids = [f"I-{index:03d}" for index in range(1, len(artifact_ids) + 1)]
+        if artifact_ids != expected_artifact_ids:
+            errors.append("artifact ids must be contiguous from I-001.")
+        if len(artifact_ids) != len(artifacts):
+            errors.append("Every artifact inventory entry must be an object with an id.")
+        for index, artifact in enumerate(artifacts, start=1):
+            if not isinstance(artifact, dict):
+                continue
+            artifact_id = artifact.get("id")
+            if not isinstance(artifact_id, str) or not ID_PATTERNS["artifact"].fullmatch(artifact_id):
+                errors.append(f"artifact #{index} has invalid id {artifact_id!r}.")
+            for field in ("locator", "rationale"):
+                if not isinstance(artifact.get(field), str) or not artifact[field].strip():
+                    errors.append(f"{artifact_id}: artifact lacks {field}.")
+            if artifact.get("role") not in {"AUTHORITATIVE", "TARGET", "SUPPORTING"}:
+                errors.append(f"{artifact_id}: artifact has unsupported role.")
+            disposition = artifact.get("disposition")
+            if disposition not in {"INSPECTED", "EXCLUDED"}:
+                errors.append(f"{artifact_id}: artifact has unsupported disposition.")
+            if artifact.get("role") == "AUTHORITATIVE" and disposition == "EXCLUDED":
+                errors.append(f"{artifact_id}: authoritative artifact cannot be EXCLUDED.")
+            if disposition == "INSPECTED":
+                if isinstance(artifact_id, str):
+                    inspected_artifact_ids.add(artifact_id)
+                if not isinstance(artifact.get("identity"), str) or not artifact["identity"].strip():
+                    errors.append(f"{artifact_id}: inspected artifact lacks identity.")
+
+    semantic_review = data.get("semanticReview")
+    if level in {"STANDARD", "STRICT"} and (
+        not isinstance(semantic_review, dict) or not semantic_review
+    ):
+        errors.append(f"{level} completion requires semanticReview.")
+        semantic_review = {}
+    elif semantic_review is None:
+        semantic_review = {}
+    elif not isinstance(semantic_review, dict):
+        errors.append("semanticReview must be an object.")
+        semantic_review = {}
+    if semantic_review:
+        mode = semantic_review.get("mode")
+        if mode not in {"INDEPENDENT_AGENT", "ADVERSARIAL_SECOND_PASS"}:
+            errors.append("semanticReview.mode is unsupported.")
+        if not isinstance(semantic_review.get("reviewer"), str) or not semantic_review["reviewer"].strip():
+            errors.append("semanticReview lacks reviewer identity.")
+        independent_available = semantic_review.get("independentReviewAvailable")
+        if not isinstance(independent_available, bool):
+            errors.append("semanticReview.independentReviewAvailable must be boolean.")
+        elif level == "STRICT" and independent_available and mode != "INDEPENDENT_AGENT":
+            errors.append("STRICT must use INDEPENDENT_AGENT when independent review is available.")
+        if mode == "ADVERSARIAL_SECOND_PASS":
+            limitation = semantic_review.get("independenceLimitation")
+            if not isinstance(limitation, str) or not limitation.strip():
+                errors.append("ADVERSARIAL_SECOND_PASS must disclose its independenceLimitation.")
+        if semantic_review.get("sourceReadDirectly") is not True:
+            errors.append("semanticReview must reread the source directly.")
+        reviewed_requirements = semantic_review.get("reviewedRequirementIds")
+        expected_reviewed_requirements = {
+            str(item.get("id")) for item in effective_mandatory if isinstance(item.get("id"), str)
+        }
+        if not _string_list(reviewed_requirements) or set(reviewed_requirements) != expected_reviewed_requirements:
+            errors.append("semanticReview must review every effective mandatory requirement exactly once.")
+        elif len(reviewed_requirements) != len(set(reviewed_requirements)):
+            errors.append("semanticReview.reviewedRequirementIds contains duplicates.")
+        reviewed_artifacts = semantic_review.get("reviewedArtifactIds")
+        if not _string_list(reviewed_artifacts) or set(reviewed_artifacts) != inspected_artifact_ids:
+            errors.append("semanticReview must review every inspected artifact exactly once.")
+        elif len(reviewed_artifacts) != len(set(reviewed_artifacts)):
+            errors.append("semanticReview.reviewedArtifactIds contains duplicates.")
+        checks = semantic_review.get("checks")
+        seen_check_kinds: set[str] = set()
+        if not isinstance(checks, list):
+            errors.append("semanticReview.checks must be an array.")
+            checks = []
+        for index, check in enumerate(checks, start=1):
+            if not isinstance(check, dict):
+                errors.append(f"semanticReview.check #{index} must be an object.")
+                continue
+            kind = check.get("kind")
+            if kind not in SEMANTIC_CHECK_KINDS:
+                errors.append(f"semanticReview.check #{index} has unsupported kind.")
+            elif kind in seen_check_kinds:
+                errors.append(f"semanticReview contains duplicate {kind} check.")
+            else:
+                seen_check_kinds.add(kind)
+            if check.get("result") != "PASS":
+                errors.append(f"semanticReview.check #{index} must PASS before an accepted claim.")
+            if not isinstance(check.get("summary"), str) or not check["summary"].strip():
+                errors.append(f"semanticReview.check #{index} lacks summary.")
+        for missing_kind in sorted(SEMANTIC_CHECK_KINDS - seen_check_kinds):
+            errors.append(f"semanticReview lacks required {missing_kind} check.")
+        findings = semantic_review.get("findings")
+        if not isinstance(findings, list):
+            errors.append("semanticReview.findings must be an array.")
+        elif findings:
+            errors.append("Unresolved semantic findings prevent an accepted completion claim.")
+        if semantic_review.get("verdict") != "PASS":
+            errors.append("semanticReview.verdict must be PASS before an accepted completion claim.")
+        expected_pass_count = sum(item.get("status") == "PASS" for item in effective_mandatory)
+        if semantic_review.get("reviewedCompletionClaim") != data.get("completionClaim"):
+            errors.append("semanticReview.reviewedCompletionClaim must match completionClaim.")
+        if semantic_review.get("reviewedMandatoryPass") != expected_pass_count:
+            errors.append("semanticReview.reviewedMandatoryPass must match the current PASS count.")
+        if semantic_review.get("reviewedMandatoryTotal") != len(effective_mandatory):
+            errors.append("semanticReview.reviewedMandatoryTotal must match the effective mandatory total.")
+        if not _valid_timestamp(semantic_review.get("capturedAt")):
+            errors.append("semanticReview lacks a valid capturedAt timestamp.")
 
     blockers = data.get("blockers")
     if not isinstance(blockers, list):
